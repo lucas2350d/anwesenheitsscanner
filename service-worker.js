@@ -1,5 +1,5 @@
 /* service-worker.js */
-const CACHE_NAME = "anwesenheit-v4"; // bei Änderungen hochzählen
+const CACHE_NAME = "anwesenheit-v5"; // bei Änderungen hochzählen
 const ASSETS = [
   "", "index.html", "manifest.json", "logo.png", "icon-192.png", "icon-512.png",
   "lib/jsqr.min.js"
