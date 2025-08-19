@@ -6,65 +6,22 @@
   <title>QR-Anwesenheitsscanner</title>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
-    body {
-      font-family: sans-serif;
-      text-align: center;
-      padding: 0.5rem;
-      margin: 0;
-      background-color: #f8f8f8;
-    }
-    #header {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      margin-bottom: 0.75rem;
-    }
+    body { font-family: sans-serif; text-align: center; padding: 0.5rem; margin: 0; background-color: #f8f8f8; }
+    #header { display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 0.75rem; }
     #clubLogoSmall { width: 36px; height: auto; }
     h2 { font-size: 1.2rem; margin: 0; }
-    #reader {
-      width: 100%;
-      max-width: 320px;
-      margin: 0 auto 1rem auto;
-      border-radius: 8px;
-      overflow: hidden;
-    }
+    #reader { width: 100%; max-width: 320px; margin: 0 auto 1rem auto; border-radius: 8px; overflow: hidden; }
     #nameInput { margin: 1rem auto; max-width: 420px; }
-    #nameInput input, #nameInput button {
-      padding: 0.5rem;
-      font-size: 0.95rem;
-    }
-    #resultsTable {
-      margin: 0 auto;
-      max-width: 420px;
-      width: 100%;
-      border-collapse: collapse;
-      background: white;
-      border-radius: 6px;
-      overflow: hidden;
-      font-size: 0.9rem;
-    }
-    #resultsTable th, #resultsTable td {
-      border: 1px solid #ccc;
-      padding: 0.4rem 0.5rem;
-    }
+    #nameInput input, #nameInput button { padding: 0.5rem; font-size: 0.95rem; }
+    #resultsTable { margin: 0 auto; max-width: 420px; width: 100%; border-collapse: collapse; background: white; border-radius: 6px; overflow: hidden; font-size: 0.9rem; }
+    #resultsTable th, #resultsTable td { border: 1px solid #ccc; padding: 0.4rem 0.5rem; }
     #resultsTable th { background-color: #eee; }
     tr.ok { background-color: #d4edda; }
     tr.warn { background-color: #fff3cd; }
     tr.error { background-color: #f8d7da; }
     tr.neutral { background-color: #e2e3e5; }
-
     #matches { margin-top: 0.5rem; }
-    #matches .match {
-      display: inline-block;
-      margin: 0.2rem;
-      padding: 0.35rem 0.5rem;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      background: #fff;
-      cursor: pointer;
-      font-size: 0.9rem;
-    }
+    #matches .match { display: inline-block; margin: 0.2rem; padding: 0.35rem 0.5rem; border-radius: 6px; border: 1px solid #ccc; background: #fff; cursor: pointer; font-size: 0.9rem; }
     #matches .match:hover { background: #f0f0f0; }
   </style>
 </head>
@@ -96,8 +53,16 @@
   <audio id="beepSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
 
   <script>
-    // Eigene Deployment-ID einsetzen:
+    // --- Hilfsfunktion zum Base64-Decode ---
+    function decodeBase64(str) {
+      try { return atob(str); } catch(e) { return ""; }
+    }
+
+    // Deployment-ID deines Apps Scripts
     const DEPLOYMENT_URL = "https://script.google.com/macros/s/AKfycbx0JvczpwlOIrBLiHr8jmRsogtslFWcawANMZ5PJZP1DHaoh_A7jHN1kG0CyBpD1pya/exec";
+
+    // Secret Key in Base64 eintragen (z. B. btoa("MeinSuperGeheimesToken123"))
+    const SECRET_KEY = decodeBase64("NyZ5eTdEcWc3JWZob2tHOCMhbGZpOA==");
 
     const resultsTbody = document.querySelector("#resultsTable tbody");
     const nameInput = document.getElementById("nameSearch");
@@ -118,16 +83,14 @@
       if (cached && cachedTime && (now - parseInt(cachedTime)) < cacheDuration) {
         teilnehmerListe = JSON.parse(cached);
         fillDatalist(teilnehmerListe);
-        console.log("✅ Teilnehmerliste aus Cache geladen");
       } else {
-        fetch(`${DEPLOYMENT_URL}?action=list`)
+        fetch(`${DEPLOYMENT_URL}?action=list&key=${SECRET_KEY}`)
           .then(res => res.json())
           .then(data => {
             teilnehmerListe = data || [];
             fillDatalist(teilnehmerListe);
             localStorage.setItem(cacheKey, JSON.stringify(teilnehmerListe));
             localStorage.setItem(cacheTimeKey, now.toString());
-            console.log("🔄 Teilnehmerliste neu geladen");
           })
           .catch(err => console.error("Fehler beim Laden der Teilnehmerliste:", err));
       }
@@ -146,9 +109,7 @@
     function normalize(str) {
       if (!str) return "";
       let s = String(str).toLowerCase().trim().replace(/\s+/g, " ");
-      try {
-        s = s.normalize("NFD").replace(/\p{Diacritic}/gu, "");
-      } catch(_) {}
+      try { s = s.normalize("NFD").replace(/\p{Diacritic}/gu, ""); } catch(_) {}
       return s;
     }
 
@@ -162,6 +123,9 @@
     }
 
     function markAttendance(url, displayName = "") {
+      const separator = url.includes("?") ? "&" : "?";
+      url = `${url}${separator}key=${SECRET_KEY}`;
+
       const now = new Date();
       const timeString = now.toLocaleTimeString();
       const tr = document.createElement("tr");
@@ -200,7 +164,6 @@
       }
     }
 
-    // Suche mit automatischem Leeren
     function chooseBySearch() {
       matchesBox.innerHTML = "";
       const input = nameInput.value;
@@ -213,7 +176,7 @@
       const exact = teilnehmerListe.find(p => normalize(p.full) === inputNorm);
       if (exact) {
         markAttendance(`${DEPLOYMENT_URL}?id=${encodeURIComponent(exact.id)}`, exact.full);
-        nameInput.value = ""; // leeren
+        nameInput.value = "";
         return;
       }
 
@@ -290,7 +253,7 @@
       alert("❌ Kamera konnte nicht gestartet werden. Erlaube den Kamerazugriff und nutze HTTPS.");
     });
 
-    // Start: Teilnehmerliste laden
+    // Start
     loadTeilnehmerListe();
   </script>
 </body>
