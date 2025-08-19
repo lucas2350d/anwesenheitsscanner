@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>QR-Anwesenheitsscanner</title>
+  <link rel="manifest" href="manifest.json">
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     body {
@@ -96,6 +97,13 @@
   <audio id="beepSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
 
   <script>
+
+        // Service Worker registrieren
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("service-worker.js")
+        .then(() => console.log("✅ Service Worker registriert"))
+        .catch(err => console.error("SW Fehler:", err));
+    }
     // Eigene Deployment-ID einsetzen:
     const DEPLOYMENT_URL = "https://script.google.com/macros/s/AKfycbx0JvczpwlOIrBLiHr8jmRsogtslFWcawANMZ5PJZP1DHaoh_A7jHN1kG0CyBpD1pya/exec";
 
