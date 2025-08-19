@@ -14,13 +14,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
   <style>
-    :root {
-      --primary: #2196f3;
-      --ok: #0a8;
-      --warn: #d97706;
-      --err: #b00;
-      --bg: #f8f8f8;
-    }
+    :root { --primary:#2196f3; --ok:#0a8; --warn:#d97706; --err:#b00; --bg:#f8f8f8; }
     html, body { height: 100%; }
     body { margin: 0; background: var(--bg); font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
     main { margin: 0 auto; max-width: 960px; padding: 16px; }
@@ -33,13 +27,9 @@
     .on { background:#e7f5ff; color:#0369a1; }
     .off { background:#fff4e5; color:#9a3412; }
     .pending { background:#eefce9; color:#166534; }
-    .controls { display:flex; gap:8px; align-items:center; margin-bottom: 12px; }
-    input[type="text"] {
-      flex:1; padding: 10px 12px; border:1px solid #ccc; border-radius: 8px; font-size: 16px; background:white;
-    }
-    button {
-      padding: 10px 14px; border: none; border-radius: 8px; background: var(--primary); color: white; font-size: 16px; cursor: pointer;
-    }
+    .controls { display:flex; gap:8px; align-items:center; margin-bottom: 12px; flex-wrap: wrap; }
+    input[type="text"] { flex:1; min-width: 260px; padding: 10px 12px; border:1px solid #ccc; border-radius: 8px; font-size: 16px; background:white; }
+    button { padding: 10px 14px; border: none; border-radius: 8px; background: var(--primary); color: white; font-size: 16px; cursor: pointer; }
     button:disabled { opacity: .6; cursor: not-allowed; }
     table { width:100%; border-collapse: collapse; background:white; border-radius: 8px; overflow: hidden; }
     th, td { padding:10px; border-bottom:1px solid #eee; text-align:left; }
@@ -50,6 +40,20 @@
     .hint { font-size: .9rem; color:#555; margin-top: 4px; }
     .muted { color:#777; }
     small time { font-variant-numeric: tabular-nums; }
+
+    /* Scanner Overlay */
+    #scanModal { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 9999; }
+    #scanBox { background: #111; color: #fff; width: min(92vw, 720px); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+    #scanHeader { display:flex; align-items:center; justify-content: space-between; padding: 8px 12px; background:#0b0b0b; }
+    #scanHeader h3 { margin:0; font-size:1rem; }
+    #scanControls { display:flex; gap:8px; align-items:center; padding: 8px 12px; flex-wrap: wrap; }
+    #scanVideo { width:100%; background:black; aspect-ratio: 4 / 3; object-fit: cover; }
+    #scanClose { background:#444; }
+    #torchBtn { background:#444; }
+    #deviceSel { background:#222; color:#fff; border-radius: 8px; padding: 6px; border: 1px solid #333; }
+    .scanHint { padding: 6px 12px; color:#cbd5e1; font-size:.9rem; }
+    #frame { position:absolute; inset:0; pointer-events:none; }
+    #frame::after { content:""; position:absolute; inset: 12% 10%; border: 3px solid rgba(255,255,255,.6); border-radius: 8px; }
   </style>
 </head>
 <body>
@@ -72,36 +76,56 @@
       <input id="input" type="text" placeholder="ID scannen oder Name eingeben (z. B. Max Mustermann)" list="participants" autocomplete="off" autofocus />
       <datalist id="participants"></datalist>
       <button id="btn">Erfassen</button>
+      <button id="btnScan" type="button" title="QR über Kamera scannen">Scannen</button>
       <button id="btnSync" type="button" title="Ausstehende Einträge jetzt hochladen">Jetzt synchronisieren</button>
     </div>
-    <p class="hint">
-      💡 Tipp: QR‑Codes sollten die <b>ID</b> enthalten. Namen kannst du tippen: <span class="muted">Vorname Nachname</span>.
-    </p>
+    <p class="hint">💡 Tipp: QR‑Codes sollten die <b>ID</b> enthalten. Namen kannst du tippen: <span class="muted">Vorname Nachname</span>.</p>
 
     <section>
       <table>
-        <thead>
-          <tr><th>ID / Name</th><th>Status</th><th>Zeit</th></tr>
-        </thead>
+        <thead><tr><th>ID / Name</th><th>Status</th><th>Zeit</th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </section>
   </main>
 
+  <!-- Scanner Modal -->
+  <div id="scanModal" role="dialog" aria-modal="true" aria-label="QR-Scanner">
+    <div id="scanBox">
+      <div id="scanHeader">
+        <h3>QR‑Scanner</h3>
+        <div style="display:flex; gap:8px;">
+          <button id="torchBtn" type="button">🔦</button>
+          <button id="scanClose" type="button">Schließen</button>
+        </div>
+      </div>
+      <div id="scanControls">
+        <label for="deviceSel">Kamera:</label>
+        <select id="deviceSel"></select>
+        <span class="scanHint">Halte den QR‑Code im Rahmen ruhig.</span>
+      </div>
+      <div style="position:relative">
+        <video id="scanVideo" playsinline muted></video>
+        <div id="frame"></div>
+        <canvas id="scanCanvas" style="display:none"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fallback-Lib lokal (für Offline-Scan) -->
+  <script src="./lib/jsqr.min.js"></script>
+
   <script>
     // 🔗 Apps Script Exec‑URL hier eintragen:
-    // Beispiel: "https://script.google.com/macros/s/AKfycbx.../exec"
-    const API_ENDPOINT = "https://script.google.com/macros/s/AKfycbx0JvczpwlOIrBLiHr8jmRsogtslFWcawANMZ5PJZP1DHaoh_A7jHN1kG0CyBpD1pya/exec";
+    const API_ENDPOINT = "https://script.google.com/macros/s/DEPLOYMENT_ID/exec";
 
-    // Service Worker relativ registrieren (wichtig für GitHub Pages Unterpfad)
+    // Service Worker relativ registrieren
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./service-worker.js")
         .then(() => {
           console.log("✅ Service Worker registriert");
-          // Dem SW das Backend mitteilen (optional; Queue-Items enthalten die URL ohnehin)
           if (navigator.serviceWorker.controller) {
             navigator.serviceWorker.controller.postMessage({ type: "INIT", payload: { api: API_ENDPOINT } });
-            // initialen Status abfragen
             navigator.serviceWorker.controller.postMessage({ type: "GET_STATUS" });
           }
         })
@@ -112,6 +136,7 @@
     const $input    = document.getElementById("input");
     const $btn      = document.getElementById("btn");
     const $btnSync  = document.getElementById("btnSync");
+    const $btnScan  = document.getElementById("btnScan");
     const $rows     = document.getElementById("rows");
     const $dl       = document.getElementById("participants");
     const $netBadge = document.getElementById("netBadge");
@@ -129,7 +154,6 @@
     window.addEventListener("online", () => {
       setNetBadge();
       setStatus("Verbunden – synchronisiere…");
-      // Fallback-Sync (für Browser ohne Background Sync)
       if (navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({ type: "FLUSH" });
         navigator.serviceWorker.controller.postMessage({ type: "GET_STATUS" });
@@ -137,7 +161,7 @@
     });
     window.addEventListener("offline", setNetBadge);
 
-    // Teilnehmerliste laden (für Autocomplete)
+    // Teilnehmerliste laden (Autocomplete)
     async function loadList() {
       try {
         setStatus("Lade Teilnehmer…");
@@ -160,7 +184,6 @@
     }
 
     function setStatus(text) { $status.textContent = text; }
-
     function parseQuery(raw) {
       const m = raw.match(/\(([^)]+)\)\s*$/);
       if (m) return { id: m[1] };
@@ -172,15 +195,10 @@
     async function tryOnlineMark(query) {
       const url = new URL(API_ENDPOINT);
       Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
-      // kurzer Timeout, damit wir offline schnell in die Queue fallen
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), 8000);
       try {
-        const res = await fetch(url.toString(), {
-          method: "GET",
-          headers: { "Accept": "application/json" },
-          signal: controller.signal
-        });
+        const res = await fetch(url.toString(), { method: "GET", headers: { "Accept": "application/json" }, signal: controller.signal });
         clearTimeout(t);
         const data = await res.json().catch(() => ({}));
         return data;
@@ -205,7 +223,6 @@
       navigator.serviceWorker.controller.postMessage({ type: "ENQUEUE", payload: { api: API_ENDPOINT, params: query } });
       setStatus("Offline gespeichert – wird synchronisiert, sobald Verbindung da ist.");
       addRow(label, "warn", "Offline gespeichert", new Date().toLocaleTimeString());
-      // Status nach dem Enqueue aktualisieren
       navigator.serviceWorker.controller.postMessage({ type: "GET_STATUS" });
     }
 
@@ -216,10 +233,8 @@
       const query = parseQuery(raw);
       $btn.disabled = true;
       setStatus("Erfasse…");
-
       const t = new Date().toLocaleTimeString();
 
-      // 1) Versuche online
       try {
         const res = await tryOnlineMark(query);
         if (res && res.ok) {
@@ -227,12 +242,10 @@
           addRow(label, "ok", statusTxt, t);
           setStatus(statusTxt);
         } else {
-          // Backend erreichbar, aber fachlicher Fehler
           addRow(label, "err", res?.message || "Fehler", t);
           setStatus(res?.message || "Fehler");
         }
       } catch (_) {
-        // 2) Offline/Timeout → in Queue speichern
         await enqueueForSync(query, label);
       }
 
@@ -241,11 +254,9 @@
       $input.focus();
     }
 
-    $btn.addEventListener("click", handleSubmit);
+    document.getElementById("btn").addEventListener("click", handleSubmit);
     $input.addEventListener("keydown", (e) => { if (e.key === "Enter") handleSubmit(); });
-
-    // Manuelle Synchronisation
-    $btnSync.addEventListener("click", () => {
+    document.getElementById("btnSync").addEventListener("click", () => {
       if (navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({ type: "FLUSH" });
         navigator.serviceWorker.controller.postMessage({ type: "GET_STATUS" });
@@ -253,23 +264,130 @@
       }
     });
 
-    // Nachrichten vom Service Worker (Queue‑Status etc.)
+    // --- Scanner ---
+    const $scanModal  = document.getElementById("scanModal");
+    const $scanVideo  = document.getElementById("scanVideo");
+    const $scanCanvas = document.getElementById("scanCanvas");
+    const $scanClose  = document.getElementById("scanClose");
+    const $torchBtn   = document.getElementById("torchBtn");
+    const $deviceSel  = document.getElementById("deviceSel");
+    document.getElementById("btnScan").addEventListener("click", openScanner);
+
+    let scanRAF = null, stream = null, barcodeDetector = null, usingBarcodeDetector = false, torchOn = false;
+
+    async function listCameras() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cams = devices.filter(d => d.kind === "videoinput");
+      $deviceSel.innerHTML = "";
+      for (const cam of cams) {
+        const opt = document.createElement("option");
+        opt.value = cam.deviceId; opt.textContent = cam.label || `Kamera ${$deviceSel.length+1}`;
+        $deviceSel.appendChild(opt);
+      }
+      return cams;
+    }
+
+    async function startStream(deviceId) {
+      stopStream();
+      const constraints = {
+        audio: false,
+        video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: "environment" } }
+      };
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      $scanVideo.srcObject = stream;
+      await $scanVideo.play();
+      const track = stream.getVideoTracks()[0];
+      const caps = track.getCapabilities?.() || {};
+      $torchBtn.style.display = caps.torch ? "inline-block" : "none";
+      torchOn = false;
+      return stream;
+    }
+
+    function stopStream() {
+      if (scanRAF) cancelAnimationFrame(scanRAF);
+      scanRAF = null;
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+        stream = null;
+      }
+    }
+
+    async function toggleTorch() {
+      const track = stream?.getVideoTracks?.()[0];
+      if (!track) return;
+      const caps = track.getCapabilities?.();
+      if (!caps || !caps.torch) return;
+      torchOn = !torchOn;
+      await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+      $torchBtn.textContent = torchOn ? "🔦 Aus" : "🔦 An";
+    }
+
+    function closeScanner() {
+      stopStream();
+      $scanModal.style.display = "none";
+    }
+
+    async function openScanner() {
+      try {
+        $scanModal.style.display = "flex";
+        try { await listCameras(); } catch {}
+        await startStream($deviceSel.value || undefined);
+
+        usingBarcodeDetector = ("BarcodeDetector" in window);
+        if (usingBarcodeDetector) {
+          try { barcodeDetector = new BarcodeDetector({ formats: ["qr_code"] }); } catch { usingBarcodeDetector = false; }
+        }
+        scanLoop();
+      } catch (e) {
+        setStatus("Kamera konnte nicht gestartet werden. Prüfe Berechtigungen & HTTPS.");
+        console.error(e);
+        closeScanner();
+      }
+    }
+
+    function processScan(text) {
+      if (!text) return;
+      $input.value = text.trim();
+      closeScanner();
+      handleSubmit();
+    }
+
+    async function scanLoop() {
+      if (!$scanVideo.srcObject) return;
+      try {
+        if (usingBarcodeDetector && barcodeDetector) {
+          const codes = await barcodeDetector.detect($scanVideo);
+          if (codes && codes.length > 0) {
+            const text = codes[0].rawValue || codes[0].rawValue;
+            return processScan(text);
+          }
+        } else if (window.jsQR) {
+          const w = $scanVideo.videoWidth || 640;
+          const h = $scanVideo.videoHeight || 480;
+          $scanCanvas.width = w; $scanCanvas.height = h;
+          const ctx = $scanCanvas.getContext("2d");
+          ctx.drawImage($scanVideo, 0, 0, w, h);
+          const img = ctx.getImageData(0, 0, w, h);
+          const code = jsQR(img.data, w, h, { inversionAttempts: "dontInvert" });
+          if (code && code.data) return processScan(code.data);
+        }
+      } catch (e) { /* schlucken & weiterscannen */ }
+      scanRAF = requestAnimationFrame(scanLoop);
+    }
+
+    document.getElementById("scanClose").addEventListener("click", closeScanner);
+    document.getElementById("torchBtn").addEventListener("click", toggleTorch);
+    $deviceSel.addEventListener("change", async () => { await startStream($deviceSel.value); });
+
+    // SW‑Events
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.addEventListener("message", (event) => {
         const msg = event.data || {};
         if (msg.type === "QUEUE_STATUS") {
           const pending = msg.pending || 0;
-          if (pending > 0) {
-            $qBadge.hidden = false;
-            $qCount.textContent = String(pending);
-          } else {
-            $qBadge.hidden = true;
-          }
-          if (msg.lastSync) {
-            $lastWrap.hidden = false;
-            $lastSync.textContent = new Date(msg.lastSync).toLocaleString();
-          }
-          // Optionaler Textstatus
+          if (pending > 0) { $qBadge.hidden = false; $qCount.textContent = String(pending); }
+          else { $qBadge.hidden = true; }
+          if (msg.lastSync) { $lastWrap.hidden = false; $lastSync.textContent = new Date(msg.lastSync).toLocaleString(); }
           if (msg.info) setStatus(msg.info);
         } else if (msg.type === "SYNC_DONE") {
           setStatus("Synchronisierung abgeschlossen");
