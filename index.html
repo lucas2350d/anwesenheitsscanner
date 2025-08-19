@@ -1,305 +1,286 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>QR-Anwesenheitsscanner</title>
-  <link rel="manifest" href="manifest.json">
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-  <style>
-    body {
-      font-family: sans-serif;
-      text-align: center;
-      padding: 0.5rem;
-      margin: 0;
-      background-color: #f8f8f8;
-    }
-    #header {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      margin-bottom: 0.75rem;
-    }
-    #clubLogoSmall { width: 36px; height: auto; }
-    h2 { font-size: 1.2rem; margin: 0; }
-    #reader {
-      width: 100%;
-      max-width: 320px;
-      margin: 0 auto 1rem auto;
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    #nameInput { margin: 1rem auto; max-width: 420px; }
-    #nameInput input, #nameInput button {
-      padding: 0.5rem;
-      font-size: 0.95rem;
-    }
-    #resultsTable {
-      margin: 0 auto;
-      max-width: 420px;
-      width: 100%;
-      border-collapse: collapse;
-      background: white;
-      border-radius: 6px;
-      overflow: hidden;
-      font-size: 0.9rem;
-    }
-    #resultsTable th, #resultsTable td {
-      border: 1px solid #ccc;
-      padding: 0.4rem 0.5rem;
-    }
-    #resultsTable th { background-color: #eee; }
-    tr.ok { background-color: #d4edda; }
-    tr.warn { background-color: #fff3cd; }
-    tr.error { background-color: #f8d7da; }
-    tr.neutral { background-color: #e2e3e5; }
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>QR‑Anwesenheitsscanner</title>
 
-    #matches { margin-top: 0.5rem; }
-    #matches .match {
-      display: inline-block;
-      margin: 0.2rem;
-      padding: 0.35rem 0.5rem;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      background: #fff;
-      cursor: pointer;
-      font-size: 0.9rem;
+  <!-- PWA -->
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#2196f3" />
+  <link rel="icon" href="./logo.png" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+  <style>
+    :root {
+      --primary: #2196f3;
+      --ok: #0a8;
+      --warn: #d97706;
+      --err: #b00;
+      --bg: #f8f8f8;
     }
-    #matches .match:hover { background: #f0f0f0; }
+    html, body { height: 100%; }
+    body { margin: 0; background: var(--bg); font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    main { margin: 0 auto; max-width: 960px; padding: 16px; }
+    header { display:flex; align-items:center; gap:12px; margin-bottom: 12px; }
+    header img { width:48px; height:48px; }
+    h1 { margin: 0; font-size: 1.25rem; }
+    #status { color:#444; display:block; margin-top:4px; }
+    .net { display:flex; gap:8px; align-items:center; margin: 8px 0 16px; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:.85rem; }
+    .on { background:#e7f5ff; color:#0369a1; }
+    .off { background:#fff4e5; color:#9a3412; }
+    .pending { background:#eefce9; color:#166534; }
+    .controls { display:flex; gap:8px; align-items:center; margin-bottom: 12px; }
+    input[type="text"] {
+      flex:1; padding: 10px 12px; border:1px solid #ccc; border-radius: 8px; font-size: 16px; background:white;
+    }
+    button {
+      padding: 10px 14px; border: none; border-radius: 8px; background: var(--primary); color: white; font-size: 16px; cursor: pointer;
+    }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    table { width:100%; border-collapse: collapse; background:white; border-radius: 8px; overflow: hidden; }
+    th, td { padding:10px; border-bottom:1px solid #eee; text-align:left; }
+    thead th { background:#f2f6ff; }
+    .ok { color: var(--ok); font-weight: 600; }
+    .warn { color: var(--warn); font-weight: 600; }
+    .err { color: var(--err); font-weight: 600; }
+    .hint { font-size: .9rem; color:#555; margin-top: 4px; }
+    .muted { color:#777; }
+    small time { font-variant-numeric: tabular-nums; }
   </style>
 </head>
 <body>
-  <div id="header">
-    <img src="logo.png" alt="Vereinslogo" id="clubLogoSmall" />
-    <h2>Anwesenheitsscanner Schwimmen</h2>
-  </div>
+  <main>
+    <header>
+      <img src="./logo.png" alt="Vereinslogo" />
+      <div>
+        <h1>Anwesenheitsscanner Schwimmen</h1>
+        <small id="status" aria-live="polite">Bereit</small>
+      </div>
+    </header>
 
-  <!-- QR-Scanner -->
-  <div id="reader"></div>
+    <div class="net" aria-live="polite">
+      <span id="netBadge" class="badge on">Verbunden</span>
+      <span id="qBadge" class="badge pending" hidden>Ausstehend: <b id="qCount">0</b></span>
+      <small id="lastSyncWrap" class="muted" hidden>Letzte Synchronisierung: <time id="lastSync"></time></small>
+    </div>
 
-  <!-- Namenssuche -->
-  <div id="nameInput">
-    <input type="text" id="nameSearch" placeholder="Name suchen …" list="nameList" style="width: 70%;" />
-    <datalist id="nameList"></datalist>
-    <button id="btnSearch">Anwesenheit erfassen</button>
-    <div id="matches" aria-live="polite"></div>
-  </div>
+    <div class="controls">
+      <input id="input" type="text" placeholder="ID scannen oder Name eingeben (z. B. Max Mustermann)" list="participants" autocomplete="off" autofocus />
+      <datalist id="participants"></datalist>
+      <button id="btn">Erfassen</button>
+      <button id="btnSync" type="button" title="Ausstehende Einträge jetzt hochladen">Jetzt synchronisieren</button>
+    </div>
+    <p class="hint">
+      💡 Tipp: QR‑Codes sollten die <b>ID</b> enthalten. Namen kannst du tippen: <span class="muted">Vorname Nachname</span>.
+    </p>
 
-  <!-- Ergebnisse -->
-  <table id="resultsTable" aria-live="polite" aria-relevant="additions">
-    <thead>
-      <tr><th>ID/Name</th><th>Status</th><th>Zeit</th></tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-
-  <audio id="beepSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
+    <section>
+      <table>
+        <thead>
+          <tr><th>ID / Name</th><th>Status</th><th>Zeit</th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </section>
+  </main>
 
   <script>
+    // 🔗 Apps Script Exec‑URL hier eintragen:
+    // Beispiel: "https://script.google.com/macros/s/AKfycbx.../exec"
+    const API_ENDPOINT = "https://script.google.com/macros/s/DEPLOYMENT_ID/exec";
 
-        // Service Worker registrieren
+    // Service Worker relativ registrieren (wichtig für GitHub Pages Unterpfad)
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("service-worker.js")
-        .then(() => console.log("✅ Service Worker registriert"))
+      navigator.serviceWorker.register("./service-worker.js")
+        .then(() => {
+          console.log("✅ Service Worker registriert");
+          // Dem SW das Backend mitteilen (optional; Queue-Items enthalten die URL ohnehin)
+          if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: "INIT", payload: { api: API_ENDPOINT } });
+            // initialen Status abfragen
+            navigator.serviceWorker.controller.postMessage({ type: "GET_STATUS" });
+          }
+        })
         .catch(err => console.error("SW Fehler:", err));
     }
-    // Eigene Deployment-ID einsetzen:
-    const DEPLOYMENT_URL = "https://script.google.com/macros/s/AKfycbx0JvczpwlOIrBLiHr8jmRsogtslFWcawANMZ5PJZP1DHaoh_A7jHN1kG0CyBpD1pya/exec";
 
-    const resultsTbody = document.querySelector("#resultsTable tbody");
-    const nameInput = document.getElementById("nameSearch");
-    const matchesBox = document.getElementById("matches");
-    const btnSearch = document.getElementById("btnSearch");
+    const $status   = document.getElementById("status");
+    const $input    = document.getElementById("input");
+    const $btn      = document.getElementById("btn");
+    const $btnSync  = document.getElementById("btnSync");
+    const $rows     = document.getElementById("rows");
+    const $dl       = document.getElementById("participants");
+    const $netBadge = document.getElementById("netBadge");
+    const $qBadge   = document.getElementById("qBadge");
+    const $qCount   = document.getElementById("qCount");
+    const $lastSync = document.getElementById("lastSync");
+    const $lastWrap = document.getElementById("lastSyncWrap");
 
-    // Teilnehmerliste laden (mit LocalStorage-Cache)
-    let teilnehmerListe = [];
-    function loadTeilnehmerListe() {
-      const cacheKey = "teilnehmerListeCache";
-      const cacheTimeKey = "teilnehmerListeCacheTime";
-      const cacheDuration = 1000 * 60 * 60; // 1 Stunde
-
-      const now = Date.now();
-      const cached = localStorage.getItem(cacheKey);
-      const cachedTime = localStorage.getItem(cacheTimeKey);
-
-      if (cached && cachedTime && (now - parseInt(cachedTime)) < cacheDuration) {
-        teilnehmerListe = JSON.parse(cached);
-        fillDatalist(teilnehmerListe);
-        console.log("✅ Teilnehmerliste aus Cache geladen");
-      } else {
-        fetch(`${DEPLOYMENT_URL}?action=list`)
-          .then(res => res.json())
-          .then(data => {
-            teilnehmerListe = data || [];
-            fillDatalist(teilnehmerListe);
-            localStorage.setItem(cacheKey, JSON.stringify(teilnehmerListe));
-            localStorage.setItem(cacheTimeKey, now.toString());
-            console.log("🔄 Teilnehmerliste neu geladen");
-          })
-          .catch(err => console.error("Fehler beim Laden der Teilnehmerliste:", err));
+    function setNetBadge() {
+      const online = navigator.onLine;
+      $netBadge.textContent = online ? "Verbunden" : "Offline";
+      $netBadge.className = "badge " + (online ? "on" : "off");
+    }
+    setNetBadge();
+    window.addEventListener("online", () => {
+      setNetBadge();
+      setStatus("Verbunden – synchronisiere…");
+      // Fallback-Sync (für Browser ohne Background Sync)
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: "FLUSH" });
+        navigator.serviceWorker.controller.postMessage({ type: "GET_STATUS" });
       }
-    }
+    });
+    window.addEventListener("offline", setNetBadge);
 
-    function fillDatalist(list) {
-      const datalist = document.getElementById("nameList");
-      datalist.innerHTML = "";
-      list.forEach(p => {
-        const option = document.createElement("option");
-        option.value = p.full || ((p.vorname || "") + " " + (p.nachname || "")).trim();
-        datalist.appendChild(option);
-      });
-    }
-
-    function normalize(str) {
-      if (!str) return "";
-      let s = String(str).toLowerCase().trim().replace(/\s+/g, " ");
+    // Teilnehmerliste laden (für Autocomplete)
+    async function loadList() {
       try {
-        s = s.normalize("NFD").replace(/\p{Diacritic}/gu, "");
-      } catch(_) {}
-      return s;
-    }
-
-    function addResultRow(idOrName, statusText, type = "neutral") {
-      const now = new Date();
-      const timeString = now.toLocaleTimeString();
-      const tr = document.createElement("tr");
-      tr.classList.add(type);
-      tr.innerHTML = `<td>${idOrName}</td><td>${statusText}</td><td>${timeString}</td>`;
-      resultsTbody.prepend(tr);
-    }
-
-    function markAttendance(url, displayName = "") {
-      const now = new Date();
-      const timeString = now.toLocaleTimeString();
-      const tr = document.createElement("tr");
-      tr.classList.add("neutral");
-      tr.innerHTML = `<td>${displayName || getIdFromUrl(url)}</td><td>⏳ Scanne...</td><td>${timeString}</td>`;
-      resultsTbody.prepend(tr);
-
-      fetch(url)
-        .then(res => res.text())
-        .then(text => {
-          let type = "error";
-          let statusText = `❌ ${text}`;
-          if (text.includes("Anwesenheit erfasst")) {
-            type = "ok";
-            statusText = `✅ ${text}`;
-          } else if (text.includes("bereits")) {
-            type = "warn";
-            statusText = `⚠️ ${text}`;
-          }
-          tr.className = type;
-          tr.cells[1].textContent = statusText;
-        })
-        .catch(err => {
-          console.error(err);
-          tr.className = "error";
-          tr.cells[1].textContent = "❌ Fehler beim Abrufen";
-        });
-    }
-
-    function getIdFromUrl(url) {
-      try {
-        const parsed = new URL(url);
-        return parsed.searchParams.get("id") || "Unbekannt";
+        setStatus("Lade Teilnehmer…");
+        const url = new URL(API_ENDPOINT);
+        url.searchParams.set("action", "list");
+        const res = await fetch(url.toString(), { headers: { "Accept": "application/json" } });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.message || "Fehler bei der Liste");
+        $dl.innerHTML = "";
+        for (const p of data.items) {
+          const opt = document.createElement("option");
+          opt.value = `${p.full} (${p.id})`;
+          $dl.appendChild(opt);
+        }
+        setStatus(`Teilnehmer geladen: ${data.count}`);
       } catch (e) {
-        return "Ungültige URL";
+        console.warn(e);
+        setStatus("Teilnehmerliste konnte nicht geladen werden (offline?)");
       }
     }
 
-    // Suche mit automatischem Leeren
-    function chooseBySearch() {
-      matchesBox.innerHTML = "";
-      const input = nameInput.value;
-      const inputNorm = normalize(input);
-      if (!inputNorm) {
-        alert("Bitte Namen eingeben oder auswählen.");
-        return;
-      }
+    function setStatus(text) { $status.textContent = text; }
 
-      const exact = teilnehmerListe.find(p => normalize(p.full) === inputNorm);
-      if (exact) {
-        markAttendance(`${DEPLOYMENT_URL}?id=${encodeURIComponent(exact.id)}`, exact.full);
-        nameInput.value = ""; // leeren
-        return;
-      }
+    function parseQuery(raw) {
+      const m = raw.match(/\(([^)]+)\)\s*$/);
+      if (m) return { id: m[1] };
+      const parts = raw.trim().split(/\s+/);
+      if (parts.length === 1) return { id: parts[0] };
+      return { vorname: parts[0], nachname: parts.slice(1).join(" ") };
+    }
 
-      const terms = inputNorm.split(" ");
-      const candidates = teilnehmerListe.filter(p => {
-        const n = normalize(p.full);
-        return terms.every(t => n.includes(t));
-      });
-
-      if (candidates.length === 0) {
-        addResultRow(input, "❌ Kein Treffer", "error");
-        nameInput.value = "";
-        return;
-      }
-      if (candidates.length === 1) {
-        const c = candidates[0];
-        markAttendance(`${DEPLOYMENT_URL}?id=${encodeURIComponent(c.id)}`, c.full);
-        nameInput.value = "";
-        return;
-      }
-
-      const info = document.createElement("div");
-      info.textContent = "Mehrere Treffer – bitte wählen:";
-      info.style.marginTop = "0.5rem";
-      matchesBox.appendChild(info);
-
-      candidates.slice(0, 8).forEach(p => {
-        const btn = document.createElement("button");
-        btn.className = "match";
-        btn.textContent = `${p.full} (ID: ${p.id})`;
-        btn.addEventListener("click", () => {
-          matchesBox.innerHTML = "";
-          markAttendance(`${DEPLOYMENT_URL}?id=${encodeURIComponent(p.id)}`, p.full);
-          nameInput.value = "";
+    async function tryOnlineMark(query) {
+      const url = new URL(API_ENDPOINT);
+      Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
+      // kurzer Timeout, damit wir offline schnell in die Queue fallen
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 8000);
+      try {
+        const res = await fetch(url.toString(), {
+          method: "GET",
+          headers: { "Accept": "application/json" },
+          signal: controller.signal
         });
-        matchesBox.appendChild(btn);
-      });
-
-      if (candidates.length > 8) {
-        const more = document.createElement("div");
-        more.textContent = `… und ${candidates.length - 8} weitere`;
-        more.style.marginTop = "0.25rem";
-        matchesBox.appendChild(more);
+        clearTimeout(t);
+        const data = await res.json().catch(() => ({}));
+        return data;
+      } catch (e) {
+        clearTimeout(t);
+        throw e;
       }
     }
 
-    btnSearch.addEventListener("click", chooseBySearch);
-    nameInput.addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") {
-        ev.preventDefault();
-        chooseBySearch();
+    function addRow(label, cls, statusText, t) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${label}</td><td class="${cls}">${statusText}</td><td>${t}</td>`;
+      $rows.prepend(tr);
+    }
+
+    async function enqueueForSync(query, label) {
+      if (!navigator.serviceWorker.controller) {
+        addRow(label, "err", "Keine SW‑Steuerung", new Date().toLocaleTimeString());
+        setStatus("Service Worker noch nicht aktiv – bitte neu laden.");
+        return;
+      }
+      navigator.serviceWorker.controller.postMessage({ type: "ENQUEUE", payload: { api: API_ENDPOINT, params: query } });
+      setStatus("Offline gespeichert – wird synchronisiert, sobald Verbindung da ist.");
+      addRow(label, "warn", "Offline gespeichert", new Date().toLocaleTimeString());
+      // Status nach dem Enqueue aktualisieren
+      navigator.serviceWorker.controller.postMessage({ type: "GET_STATUS" });
+    }
+
+    async function handleSubmit() {
+      const raw = $input.value.trim();
+      if (!raw) return;
+      const label = raw;
+      const query = parseQuery(raw);
+      $btn.disabled = true;
+      setStatus("Erfasse…");
+
+      const t = new Date().toLocaleTimeString();
+
+      // 1) Versuche online
+      try {
+        const res = await tryOnlineMark(query);
+        if (res && res.ok) {
+          const statusTxt = res.code === "already_marked" ? "Bereits erfasst" : "Erfasst";
+          addRow(label, "ok", statusTxt, t);
+          setStatus(statusTxt);
+        } else {
+          // Backend erreichbar, aber fachlicher Fehler
+          addRow(label, "err", res?.message || "Fehler", t);
+          setStatus(res?.message || "Fehler");
+        }
+      } catch (_) {
+        // 2) Offline/Timeout → in Queue speichern
+        await enqueueForSync(query, label);
+      }
+
+      $btn.disabled = false;
+      $input.value = "";
+      $input.focus();
+    }
+
+    $btn.addEventListener("click", handleSubmit);
+    $input.addEventListener("keydown", (e) => { if (e.key === "Enter") handleSubmit(); });
+
+    // Manuelle Synchronisation
+    $btnSync.addEventListener("click", () => {
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: "FLUSH" });
+        navigator.serviceWorker.controller.postMessage({ type: "GET_STATUS" });
+        setStatus("Synchronisiere…");
       }
     });
 
-    // QR-Code Scanner
-    const html5QrCode = new Html5Qrcode("reader");
-    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-    let isScanning = false;
+    // Nachrichten vom Service Worker (Queue‑Status etc.)
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("message", (event) => {
+        const msg = event.data || {};
+        if (msg.type === "QUEUE_STATUS") {
+          const pending = msg.pending || 0;
+          if (pending > 0) {
+            $qBadge.hidden = false;
+            $qCount.textContent = String(pending);
+          } else {
+            $qBadge.hidden = true;
+          }
+          if (msg.lastSync) {
+            $lastWrap.hidden = false;
+            $lastSync.textContent = new Date(msg.lastSync).toLocaleString();
+          }
+          // Optionaler Textstatus
+          if (msg.info) setStatus(msg.info);
+        } else if (msg.type === "SYNC_DONE") {
+          setStatus("Synchronisierung abgeschlossen");
+        } else if (msg.type === "SYNC_PROGRESS") {
+          setStatus(`Synchronisiere… (${msg.done}/${msg.total})`);
+        }
+      });
+    }
 
-    html5QrCode.start(
-      { facingMode: "environment" },
-      config,
-      (decodedText) => {
-        if (isScanning) return;
-        isScanning = true;
-        const beep = document.getElementById("beepSound");
-        try { beep.currentTime = 0; beep.play(); } catch(_) {}
-        markAttendance(decodedText);
-        setTimeout(() => { isScanning = false; }, 2000);
-      },
-      (errorMessage) => {}
-    ).catch(err => {
-      console.error("Kamera konnte nicht gestartet werden", err);
-      alert("❌ Kamera konnte nicht gestartet werden. Erlaube den Kamerazugriff und nutze HTTPS.");
-    });
-
-    // Start: Teilnehmerliste laden
-    loadTeilnehmerListe();
+    // Initial
+    loadList();
   </script>
 </body>
 </html>
