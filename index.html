@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>QR-Anwesenheitsscanner</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2196f3">
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   <style>
     body { font-family: sans-serif; text-align: center; padding: 0.5rem; margin: 0; background-color: #f8f8f8; }
@@ -53,6 +55,12 @@
   <audio id="beepSound" src="https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg" preload="auto"></audio>
 
   <script>
+
+      if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("service-worker.js")
+        .then(() => console.log("✅ Service Worker registriert"))
+        .catch(err => console.error("SW Fehler:", err));
+    }
     // --- Hilfsfunktion zum Base64-Decode ---
     function decodeBase64(str) {
       try { return atob(str); } catch(e) { return ""; }
